@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from text.textCorrection import textCorrection
 from text.languageLearner import learningAgent
 from audio.voicePronunciation import speech_to_text
@@ -41,63 +42,92 @@ def LearnEnglish(data: Text):
 
 @routes.post("/ocr-text-correction")
 async def CorrectOCRText(file: UploadFile = File(...)):
-    """
-    Handles OCR text correction from an uploaded audio file.
-    """
     try:
-        # Save the uploaded file to a temporary location
         temp_dir = tempfile.mkdtemp()
-        temp_file_path = os.path.join(temp_dir, file.filename)
+
+        # Handle missing extension
+        ext_map = {
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/bmp": ".bmp",
+            "image/gif": ".gif",
+            "image/tiff": ".tiff",
+            "application/pdf": ".pdf"
+        }
+
+        filename = file.filename or "uploaded_file"
+        ext = os.path.splitext(filename)[1].lower()
+        if not ext:
+            ext = ext_map.get(file.content_type, "")
+            filename += ext
         
+        temp_file_path = os.path.join(temp_dir, filename)
+
+        # Save uploaded file
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Perform OCR
+        # OCR
         extracted_text = extract_text_from_image(temp_file_path)
 
-        # Correct the extracted text
+        # Correction
         corrected_text = textCorrection(extracted_text)
         
-        # Clean up temporary file
+        # Cleanup
         os.remove(temp_file_path)
         os.rmdir(temp_dir)
 
-        return {"filename": file.filename,"extracted_text":extracted_text, "corrected_text": corrected_text}
+        return {"filename": filename, "extracted_text": extracted_text, "corrected_text": corrected_text}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @routes.post("/voice-pronunciation-correction")
-async def CorrectVoicePronunciation(file: UploadFile = File(...)):
-    """
-    Handles voice pronunciation correction and returns an audio response.
-    """
+async def correct_voice_pronunciation(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith('.wav'):
+        raise HTTPException(status_code=400, detail="Only .wav audio files are accepted.")
+    
+    if file.content_type != "audio/wav":
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a WAV audio file.")
+
+    temp_audio_path = None
+    temp_speech_path = None
+
     try:
         # Save the uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_audio:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
             shutil.copyfileobj(file.file, temp_audio)
             temp_audio_path = temp_audio.name
 
         # Convert speech to text
         transcribed_text = speech_to_text(temp_audio_path)
 
-        # Cleanup: Delete temp file after processing
-        os.remove(temp_audio_path)
+        if not transcribed_text:
+            raise HTTPException(status_code=400, detail="Speech recognition failed or no speech detected.")
 
-        if transcribed_text:
-            # Correct the transcribed text
-            corrected_text = textCorrection(transcribed_text)
+        # Correct the transcribed text
+        corrected_text = textCorrection(transcribed_text)
 
-            # Convert corrected text to speech using gTTS
-            tts = gTTS(corrected_text, lang="en")
-            temp_speech_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        # Convert corrected text to speech using gTTS
+        tts = gTTS(corrected_text, lang="en")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_speech_file:
             tts.save(temp_speech_file.name)
+            temp_speech_path = temp_speech_file.name
 
-            return FileResponse(
-                temp_speech_file.name,
-                media_type="audio/mpeg",
-                filename="corrected_speech.mp3"
-            )
-        else:
-            raise HTTPException(status_code=400, detail="Speech recognition failed.")
+        # Stream the mp3 file instead of returning it as a full file
+        def iterfile():
+            with open(temp_speech_path, mode="rb") as file_like:
+                while chunk := file_like.read(1024 * 32):  # Stream 32 KB chunks
+                    yield chunk
+
+        return StreamingResponse(iterfile(), media_type="audio/mpeg")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+    finally:
+        # Always cleanup temp files
+        if temp_audio_path and os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
+        # Optional: Keep mp3 cleanup after streaming OR handle externally

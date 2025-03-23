@@ -8,9 +8,6 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-app.py
-test.py
-my_wallet.PNG
 venv/
 build/
 develop-eggs/

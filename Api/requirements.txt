@@ -4,4 +4,6 @@ langchain-community
 langchain-groq
 fastapi[standard]
 SpeechRecognition
-streamlit
+opencv-python
+google-genai
+gtts
