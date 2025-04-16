@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 app.py
+README.md
 test.py
 my_wallet.PNG
 venv/

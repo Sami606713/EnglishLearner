@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voice Pronunciation Correction</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 40px;
+      text-align: center;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      max-width: 500px;
+      margin: auto;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    input[type="file"] {
+      margin-top: 20px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    audio {
+      margin-top: 30px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Voice Pronunciation Correction</h2>
+    <form id="uploadForm">
+      <input type="file" name="file" id="fileInput" accept=".wav" required />
+      <br/>
+      <button type="submit">Upload and Correct</button>
+    </form>
+    <audio id="audioPlayer" controls hidden></audio>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('fileInput');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const endpoint = 'http://localhost:8000/text/voice-pronunciation-correction'; // <-- Change if needed
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const file = fileInput.files[0];
+      if (!file || file.type !== 'audio/wav') {
+        alert("Please upload a .wav file.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "Something went wrong");
+        }
+
+        const blob = await response.blob();
+        const audioURL = URL.createObjectURL(blob);
+        audioPlayer.src = audioURL;
+        audioPlayer.hidden = false;
+        audioPlayer.play();
+      } catch (error) {
+        alert("Error: " + error.message);
+        audioPlayer.hidden = true;
+      }
+    });
+  </script>
+</body>
+</html>
