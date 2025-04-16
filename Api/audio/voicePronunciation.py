@@ -24,6 +24,6 @@ def speech_to_text(audio_file):
     return None
   
 if __name__ == "__main__":
-    audio_file = "data/03-01-01-01-01-01-01.wav"
+    audio_file = "data/Speaker26_000.wav"
     text = speech_to_text(audio_file)
     print(text)

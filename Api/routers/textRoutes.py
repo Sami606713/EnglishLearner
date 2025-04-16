@@ -109,25 +109,20 @@ async def correct_voice_pronunciation(file: UploadFile = File(...)):
 
         # Correct the transcribed text
         corrected_text = textCorrection(transcribed_text)
-
+        print(corrected_text)
         # Convert corrected text to speech using gTTS
         tts = gTTS(corrected_text, lang="en")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_speech_file:
             tts.save(temp_speech_file.name)
             temp_speech_path = temp_speech_file.name
 
-        # Stream the mp3 file instead of returning it as a full file
-        def iterfile():
-            with open(temp_speech_path, mode="rb") as file_like:
-                while chunk := file_like.read(1024 * 32):  # Stream 32 KB chunks
-                    yield chunk
-
-        return StreamingResponse(iterfile(), media_type="audio/mpeg")
+        # Return the full mp3 file
+        return FileResponse(temp_speech_path, media_type="audio/mpeg", filename="corrected_speech.mp3")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
     finally:
-        # Always cleanup temp files
+        # Clean up the input file only
         if temp_audio_path and os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
-        # Optional: Keep mp3 cleanup after streaming OR handle externally
+        # DO NOT delete temp_speech_path here if you're returning it; let FastAPI serve it first.
